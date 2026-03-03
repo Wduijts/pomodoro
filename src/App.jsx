@@ -1,5 +1,39 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
+function createRainSound(ctx) {
+  const bufferSize = 2 * ctx.sampleRate
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1
+  }
+
+  const source = ctx.createBufferSource()
+  source.buffer = buffer
+  source.loop = true
+
+  const lowpass = ctx.createBiquadFilter()
+  lowpass.type = 'lowpass'
+  lowpass.frequency.value = 1200
+
+  const bandpass = ctx.createBiquadFilter()
+  bandpass.type = 'bandpass'
+  bandpass.frequency.value = 400
+  bandpass.Q.value = 0.8
+
+  const gain = ctx.createGain()
+  gain.gain.setValueAtTime(0, ctx.currentTime)
+  gain.gain.linearRampToValueAtTime(0.45, ctx.currentTime + 2)
+
+  source.connect(lowpass)
+  lowpass.connect(bandpass)
+  bandpass.connect(gain)
+  gain.connect(ctx.destination)
+  source.start()
+
+  return { source, gain }
+}
+
 const MODES = {
   focus: { label: 'Focus', duration: 25 * 60, color: '#f97316', glow: '#f9731640' },
   break: { label: 'Break', duration: 5 * 60, color: '#22d3ee', glow: '#22d3ee40' },
@@ -32,6 +66,7 @@ export default function App() {
   const [timeLeft, setTimeLeft] = useState(MODES.focus.duration)
   const [isRunning, setIsRunning] = useState(false)
   const intervalRef = useRef(null)
+  const rainRef = useRef(null)
 
   const currentMode = MODES[mode]
   const progress = timeLeft / currentMode.duration
@@ -59,6 +94,24 @@ export default function App() {
     }
     return () => clearInterval(intervalRef.current)
   }, [isRunning, handleComplete])
+
+  useEffect(() => {
+    const shouldRain = mode === 'break' && isRunning
+
+    if (shouldRain && !rainRef.current) {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      const { source, gain } = createRainSound(ctx)
+      rainRef.current = { ctx, source, gain }
+    } else if (!shouldRain && rainRef.current) {
+      const { ctx, gain, source } = rainRef.current
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.5)
+      setTimeout(() => {
+        source.stop()
+        ctx.close()
+        rainRef.current = null
+      }, 1600)
+    }
+  }, [mode, isRunning])
 
   const switchMode = (newMode) => {
     clearInterval(intervalRef.current)
