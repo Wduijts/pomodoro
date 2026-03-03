@@ -8,30 +8,41 @@ function createRainSound(ctx) {
     data[i] = Math.random() * 2 - 1
   }
 
-  const source = ctx.createBufferSource()
-  source.buffer = buffer
-  source.loop = true
+  const masterGain = ctx.createGain()
+  masterGain.gain.setValueAtTime(0, ctx.currentTime)
+  masterGain.gain.linearRampToValueAtTime(0.7, ctx.currentTime + 2)
+  masterGain.connect(ctx.destination)
 
-  const lowpass = ctx.createBiquadFilter()
-  lowpass.type = 'lowpass'
-  lowpass.frequency.value = 1200
+  // Layer 1: high-frequency hiss — the "shhhh" of rainfall
+  const hiss = ctx.createBufferSource()
+  hiss.buffer = buffer
+  hiss.loop = true
+  const highpass = ctx.createBiquadFilter()
+  highpass.type = 'highpass'
+  highpass.frequency.value = 1000
+  const hissGain = ctx.createGain()
+  hissGain.gain.value = 0.6
+  hiss.connect(highpass)
+  highpass.connect(hissGain)
+  hissGain.connect(masterGain)
+  hiss.start()
 
+  // Layer 2: mid-frequency patter — drops hitting a surface
+  const patter = ctx.createBufferSource()
+  patter.buffer = buffer
+  patter.loop = true
   const bandpass = ctx.createBiquadFilter()
   bandpass.type = 'bandpass'
-  bandpass.frequency.value = 400
-  bandpass.Q.value = 0.8
+  bandpass.frequency.value = 1800
+  bandpass.Q.value = 0.4
+  const patterGain = ctx.createGain()
+  patterGain.gain.value = 0.4
+  patter.connect(bandpass)
+  bandpass.connect(patterGain)
+  patterGain.connect(masterGain)
+  patter.start()
 
-  const gain = ctx.createGain()
-  gain.gain.setValueAtTime(0, ctx.currentTime)
-  gain.gain.linearRampToValueAtTime(0.45, ctx.currentTime + 2)
-
-  source.connect(lowpass)
-  lowpass.connect(bandpass)
-  bandpass.connect(gain)
-  gain.connect(ctx.destination)
-  source.start()
-
-  return { source, gain }
+  return { sources: [hiss, patter], gain: masterGain }
 }
 
 const MODES = {
@@ -103,10 +114,10 @@ export default function App() {
       const { source, gain } = createRainSound(ctx)
       rainRef.current = { ctx, source, gain }
     } else if (!shouldRain && rainRef.current) {
-      const { ctx, gain, source } = rainRef.current
+      const { ctx, gain, sources } = rainRef.current
       gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.5)
       setTimeout(() => {
-        source.stop()
+        sources.forEach(s => s.stop())
         ctx.close()
         rainRef.current = null
       }, 1600)
