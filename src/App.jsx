@@ -36,7 +36,7 @@ function createRainSound(ctx) {
 
 const MODES = {
   focus: { label: 'Focus', duration: 25 * 60, color: '#f97316', glow: '#f9731640' },
-  break: { label: 'Break', duration: 5 * 60, color: '#22d3ee', glow: '#22d3ee40' },
+  break: { label: 'Break', duration: 1 * 60, color: '#22d3ee', glow: '#22d3ee40' },
 }
 
 const RADIUS = 120
