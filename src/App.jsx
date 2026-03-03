@@ -1,49 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-function createRainSound(ctx) {
-  const bufferSize = 2 * ctx.sampleRate
-  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
-  const data = buffer.getChannelData(0)
-  for (let i = 0; i < bufferSize; i++) {
-    data[i] = Math.random() * 2 - 1
-  }
-
-  const masterGain = ctx.createGain()
-  masterGain.gain.setValueAtTime(0, ctx.currentTime)
-  masterGain.gain.linearRampToValueAtTime(0.7, ctx.currentTime + 2)
-  masterGain.connect(ctx.destination)
-
-  // Layer 1: high-frequency hiss — the "shhhh" of rainfall
-  const hiss = ctx.createBufferSource()
-  hiss.buffer = buffer
-  hiss.loop = true
-  const highpass = ctx.createBiquadFilter()
-  highpass.type = 'highpass'
-  highpass.frequency.value = 1000
-  const hissGain = ctx.createGain()
-  hissGain.gain.value = 0.6
-  hiss.connect(highpass)
-  highpass.connect(hissGain)
-  hissGain.connect(masterGain)
-  hiss.start()
-
-  // Layer 2: mid-frequency patter — drops hitting a surface
-  const patter = ctx.createBufferSource()
-  patter.buffer = buffer
-  patter.loop = true
-  const bandpass = ctx.createBiquadFilter()
-  bandpass.type = 'bandpass'
-  bandpass.frequency.value = 1800
-  bandpass.Q.value = 0.4
-  const patterGain = ctx.createGain()
-  patterGain.gain.value = 0.4
-  patter.connect(bandpass)
-  bandpass.connect(patterGain)
-  patterGain.connect(masterGain)
-  patter.start()
-
-  return { sources: [hiss, patter], gain: masterGain }
-}
 
 const MODES = {
   focus: { label: 'Focus', duration: 25 * 60, color: '#f97316', glow: '#f9731640' },
@@ -77,7 +33,7 @@ export default function App() {
   const [timeLeft, setTimeLeft] = useState(MODES.focus.duration)
   const [isRunning, setIsRunning] = useState(false)
   const intervalRef = useRef(null)
-  const rainRef = useRef(null)
+  const rainRef = useRef(new Audio('/rain.wav'))
 
   const currentMode = MODES[mode]
   const progress = timeLeft / currentMode.duration
@@ -107,20 +63,15 @@ export default function App() {
   }, [isRunning, handleComplete])
 
   useEffect(() => {
-    const shouldRain = mode === 'break' && isRunning
+    const audio = rainRef.current
+    audio.loop = true
+    audio.volume = 0.4
 
-    if (shouldRain && !rainRef.current) {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)()
-      const { source, gain } = createRainSound(ctx)
-      rainRef.current = { ctx, source, gain }
-    } else if (!shouldRain && rainRef.current) {
-      const { ctx, gain, sources } = rainRef.current
-      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.5)
-      setTimeout(() => {
-        sources.forEach(s => s.stop())
-        ctx.close()
-        rainRef.current = null
-      }, 1600)
+    if (mode === 'break' && isRunning) {
+      audio.play()
+    } else {
+      audio.pause()
+      audio.currentTime = 0
     }
   }, [mode, isRunning])
 
